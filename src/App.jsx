@@ -354,7 +354,7 @@ export default function TranslationApp() {
           </div>
         )}
       </div>
-      {/* <DebugTranslation/> */}
+      <DebugTranslation/>
     </div>
     
   );

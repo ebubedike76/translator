@@ -140,7 +140,7 @@ export const useDeepSeek = () => {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          "model": "deepseek/deepseek-r1-0528:free",
+          "model": "microsoft/phi-4-reasoning-plus:free",
           "messages": messages,
           "temperature": isExplanation ? 0.3 : 0.1,
           // Increase max_tokens to prevent cut-off in reasoning field
