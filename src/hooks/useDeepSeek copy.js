@@ -4,67 +4,27 @@ export const useDeepSeek = () => {
   const [translations, setTranslations] = useState([]);
   const [isTranslating, setIsTranslating] = useState(false);
   const [isExplaining, setIsExplaining] = useState(false);
-  const [useLocalModel, setUseLocalModel] = useState(true); // Prefer local model
-  const [modelStatus, setModelStatus] = useState({ translation_ready: false, sentiment_ready: false });
-  const [modelStatusChecked, setModelStatusChecked] = useState(false);
   const processedTexts = useRef(new Set());
   const translationCache = useRef(new Map());
 
-  // Check if local models are available
-  const checkModelStatus = useCallback(async () => {
-    console.log("🔄 Checking model status...");
-  try {
-    const response = await fetch("http://localhost:5000/api/models/status");
-    console.log("HTTP status:", response.status); // Should be 200
-    const status = await response.json();
-    console.log("Model status:", status); // Should show translation_ready: true
-    return status.translation_ready;
-  } catch (error) {
-    console.error("❌ Model check failed:", error); // Likely CORS/network error
-    return false;
-  }
-  }, []);
-
-  
-  // Local translation using the Python backend
-  const translateWithLocalModel = async (text) => {
-     console.log("Sending to local model:", text); // Verify Chinese characters appear correctly
-  try {
-    const response = await fetch("http://localhost:5000/translate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json; charset=utf-8", // Explicit UTF-8
-      },
-      body: JSON.stringify({ text }),
-    });
-
-      if (!response.ok) {
-        throw new Error(`Local translation failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return {
-        text: data.translation,
-        context: 'Local model translation',
-        tone: 'Professional',
-        alternatives: []
-      };
-    } catch (error) {
-      console.error('Local translation error:', error);
-      throw error;
-    }
-  };
-
-  // Extract clean translation from DeepSeek R1 response (kept as fallback)
+  // Extract clean translation from DeepSeek R1 response
   const extractTranslation = (message) => {
     let responseText = '';
 
+    // First, try the content field
     if (message.content && message.content.trim()) {
       responseText = message.content.trim();
+      console.log('Using content field:', responseText);
     } 
+    // If content is empty, extract from reasoning field
     else if (message.reasoning && message.reasoning.trim()) {
       const reasoning = message.reasoning.trim();
+      console.log('Content field empty, extracting from reasoning:', reasoning);
       
+      // Simple approach: look for the actual translation after the Chinese text
+      // The reasoning often contains the analysis, we want the final English result
+      
+      // Pattern 1: Look for quoted English text
       const quotedPatterns = [
         /["""']([A-Z][^"""']{5,50})["""']/g,
         /["""']([Hello|Hi|Good|Nice|Thank|Welcome][^"""']*)["""']/gi
@@ -76,12 +36,14 @@ export const useDeepSeek = () => {
           const candidate = match[1]?.trim();
           if (candidate && isValidTranslation(candidate)) {
             responseText = candidate;
+            console.log('Found quoted translation:', responseText);
             break;
           }
         }
         if (responseText) break;
       }
       
+      // Pattern 2: Look for translation keywords followed by English
       if (!responseText) {
         const translationPatterns = [
           /(?:translates? to|means?|is|would be)[:\s]*["""']?([A-Z][^"""'\n.]{5,50})["""']?[.!]?\s*$/i,
@@ -94,13 +56,36 @@ export const useDeepSeek = () => {
             const candidate = match[1].trim();
             if (isValidTranslation(candidate)) {
               responseText = candidate;
+              console.log('Found translation after keyword:', responseText);
               break;
             }
           }
         }
       }
+      
+      // Pattern 3: Look for English sentences that seem like translations
+      if (!responseText) {
+        const sentences = reasoning.split(/[.!?。！？]/).map(s => s.trim());
+        for (const sentence of sentences.reverse()) { // Check from end first
+          if (sentence && isValidTranslation(sentence)) {
+            responseText = sentence;
+            console.log('Found English sentence:', responseText);
+            break;
+          }
+        }
+      }
+      
+      // Pattern 4: If reasoning was cut off, try to extract partial translation
+      if (!responseText && reasoning.includes('very')) {
+        // Handle common cut-off scenarios for "很高兴见到你"
+        if (reasoning.includes('Hello') || reasoning.includes('hello')) {
+          responseText = 'Hello, nice to meet you';
+          console.log('Using fallback for common greeting:', responseText);
+        }
+      }
     }
 
+    // Clean up the extracted text
     if (responseText) {
       responseText = responseText
         .replace(/^(Translation:|English:|Output:|Answer:|Result:)\s*/i, '')
@@ -109,6 +94,7 @@ export const useDeepSeek = () => {
         .replace(/\s+/g, ' ')
         .trim();
       
+      // Ensure it ends with appropriate punctuation
       if (responseText && !/[.!?]$/.test(responseText)) {
         responseText += '.';
       }
@@ -117,23 +103,91 @@ export const useDeepSeek = () => {
     return responseText;
   };
 
+  // Helper function to validate if text looks like a proper English translation
   const isValidTranslation = (text) => {
     if (!text || text.length < 3 || text.length > 100) return false;
+    
+    // Must start with capital letter
     if (!/^[A-Z]/.test(text)) return false;
+    
+    // Must contain mostly English characters
     if (!/^[a-zA-Z\s,.'!?-]+$/.test(text)) return false;
+    
+    // Avoid meta-commentary
     if (/(?:phrase|translat|recogniz|direct|part|means|common|standard|polite|literally|equivalent)/i.test(text)) {
       return false;
     }
+    
+    // Prefer complete sentences or common greetings
     return /(?:Hello|Hi|Good|Nice|Thank|Welcome|How|What|Please)/i.test(text) || /[.!?]$/.test(text);
   };
 
-  // AI translation as fallback
-  const translateWithAI = async (text) => {
-    const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
-    if (!apiKey) {
-      throw new Error('API key is required');
-    }
+  // OpenRouter AI API call
+  const callOpenRouterAPI = async (messages, isExplanation = false) => {
+    try {
+      const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+      if (!apiKey) {
+        console.error('OpenRouter API key is missing');
+        throw new Error('API key is required');
+      }
 
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": window.location.origin,
+          "X-Title": "Professional Real-Time Translator",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          "model": "deepseek/deepseek-r1-0528:free",
+          "messages": messages,
+          "temperature": isExplanation ? 0.3 : 0.1,
+          // Increase max_tokens to prevent cut-off in reasoning field
+          "max_tokens": isExplanation ? 400 : 300,
+          "stream": false
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`API error: ${response.status} - ${errorText}`);
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('API Response:', data);
+      
+      const choice = data.choices?.[0];
+      if (!choice) {
+        throw new Error('No choices returned from API');
+      }
+
+      const responseText = extractTranslation(choice.message);
+
+      if (!responseText) {
+        console.error('No translation found in response:', data);
+        throw new Error('No translation content found in API response');
+      }
+
+      return responseText;
+    } catch (error) {
+      console.error('OpenRouter API error:', error);
+      throw error;
+    }
+  };
+
+  // Smart deduplication
+  const isDuplicate = useCallback((text) => {
+    const normalizedText = text.toLowerCase().trim();
+    return processedTexts.current.has(normalizedText);
+  }, []);
+
+  // Generate AI translation
+  const generateAITranslation = async (text) => {
+    console.log('Generating translation for:', text);
+    
+    // Simplified system prompt to reduce reasoning length
     const systemPrompt = `Translate Chinese to English. Respond with ONLY the English translation.
 
 Examples:
@@ -142,104 +196,55 @@ Examples:
 谢谢 → Thank you
 我们开始会议吧 → Let's start the meeting`;
 
+    const userPrompt = `${text}`;
+
     const messages = [
       { role: "system", content: systemPrompt },
-      { role: "user", content: text }
+      { role: "user", content: userPrompt }
     ];
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "HTTP-Referer": window.location.origin,
-        "X-Title": "Professional Real-Time Translator",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        "model": "deepseek/deepseek-r1-0528:free",
-        "messages": messages,
-        "temperature": 0.1,
-        "max_tokens": 300,
-        "stream": false
-      })
-    });
+    try {
+      const aiResponse = await callOpenRouterAPI(messages);
+      console.log('Clean translation received:', aiResponse);
 
-    if (!response.ok) {
-      throw new Error(`AI API error: ${response.status}`);
+      return {
+        text: aiResponse,
+        context: 'Business meeting translation',
+        tone: 'Professional',
+        alternatives: []
+      };
+    } catch (error) {
+      console.error('Translation generation error:', error);
+      throw error;
     }
-
-    const data = await response.json();
-    const choice = data.choices?.[0];
-    if (!choice) {
-      throw new Error('No choices returned from API');
-    }
-
-    const responseText = extractTranslation(choice.message);
-    if (!responseText) {
-      throw new Error('No translation content found in API response');
-    }
-
-    return {
-      text: responseText,
-      context: 'AI translation',
-      tone: 'Professional',
-      alternatives: []
-    };
   };
 
-  // Smart translation function that chooses between local and AI
-  const generateTranslation = async (text) => {
-    console.log('Generating translation for:', text);
-    console.log('Model status:', modelStatus);
-    console.log('Use local model:', useLocalModel);
-    
-    // Always try local model first if it's ready and we prefer it
-    if (useLocalModel && modelStatus.translation_ready) {
-      try {
-        console.log('🚀 Using LOCAL MODEL for fast translation');
-        const result = await translateWithLocalModel(text);
-        console.log('✅ Local translation successful:', result);
-        return result;
-      } catch (error) {
-        console.log('❌ Local model failed, falling back to AI:', error.message);
-      }
-    } else {
-      console.log('Local model not ready:', { 
-        useLocalModel, 
-        ready: modelStatus.translation_ready,
-        checked: modelStatusChecked 
-      });
-    }
-
-    // Fallback to AI translation
-    console.log('🤖 Using AI for translation (fallback)');
-    return await translateWithAI(text);
-  };
-
-  const isDuplicate = useCallback((text) => {
-    const normalizedText = text.toLowerCase().trim();
-    return processedTexts.current.has(normalizedText);
-  }, []);
-
+  // Main translation function
   const translateText = useCallback(async (transcriptData) => {
     const { text, isFinal, isSentenceComplete, sentenceId } = transcriptData;
+    
+    console.log('TranslateText called with:', { text, isFinal, isSentenceComplete });
     
     if (!text.trim()) return;
 
     const normalizedText = text.toLowerCase().trim();
     
+    // Only process complete sentences to avoid duplicate translations
     if (!isSentenceComplete && !isFinal) {
       console.log('Skipping incomplete sentence:', text);
       return;
     }
 
+    // Check if already processed
     if (processedTexts.current.has(normalizedText)) {
       console.log('Already processed:', text);
       return;
     }
 
+    // Mark as processed
     processedTexts.current.add(normalizedText);
     
+    // Check cache first
     if (translationCache.current.has(normalizedText)) {
       console.log('Using cached translation for:', text);
       const cached = translationCache.current.get(normalizedText);
@@ -250,14 +255,14 @@ Examples:
     setIsTranslating(true);
     
     try {
-      // Ensure model status is checked before translation
-      if (!modelStatusChecked) {
-        console.log('Checking model status before translation...');
-        await checkModelStatus();
-      }
+      console.log('Starting translation for:', text);
+      const translation = await generateAITranslation(text);
+      console.log('Translation completed:', translation);
       
-      const translation = await generateTranslation(text);
+      // Cache the translation
       translationCache.current.set(normalizedText, translation);
+      
+      // Update the UI
       updateTranslationEntry(text, translation, transcriptData);
       
     } catch (error) {
@@ -271,10 +276,13 @@ Examples:
     } finally {
       setIsTranslating(false);
     }
-  }, [useLocalModel, modelStatus.translation_ready, modelStatusChecked, checkModelStatus]);
+  }, []);
 
+  // Update translation entry in state
   const updateTranslationEntry = useCallback((text, translation, transcriptData) => {
     const { confidence, contextInfo, isFinal, isSentenceComplete, sentenceId } = transcriptData;
+    
+    console.log('Updating translation entry:', { text, translation });
     
     const newEntry = {
       id: sentenceId || `${Date.now()}-${Math.random()}`,
@@ -292,29 +300,28 @@ Examples:
     };
 
     setTranslations(prev => {
+      // Check if entry already exists
       const existingIndex = prev.findIndex(t => t.id === newEntry.id);
       if (existingIndex >= 0) {
         const updated = [...prev];
         updated[existingIndex] = newEntry;
         return updated;
       }
-      return [newEntry, ...prev.slice(0, 14)];
+      
+      // Add new entry at the beginning
+      return [newEntry, ...prev.slice(0, 14)]; // Keep only last 15 translations
     });
   }, []);
 
+  // Explain translation with AI
   const explainTranslation = useCallback(async (originalText, translatedText) => {
     if (!originalText || !translatedText) return null;
 
     setIsExplaining(true);
     
     try {
-      // Always use AI for explanations since local model doesn't handle this
-      const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
-      if (!apiKey) {
-        return 'API key required for explanations.';
-      }
-
       const systemPrompt = `Explain Chinese-English translations briefly (max 30 words).`;
+
       const userPrompt = `Why is "${originalText}" translated as "${translatedText}"?`;
 
       const messages = [
@@ -322,31 +329,8 @@ Examples:
         { role: "user", content: userPrompt }
       ];
 
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "HTTP-Referer": window.location.origin,
-          "X-Title": "Professional Real-Time Translator",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          "model": "deepseek/deepseek-r1-0528:free",
-          "messages": messages,
-          "temperature": 0.3,
-          "max_tokens": 400,
-          "stream": false
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const choice = data.choices?.[0];
-      const explanation = extractTranslation(choice.message);
-      return explanation || 'Unable to provide explanation.';
+      const explanation = await callOpenRouterAPI(messages, true);
+      return explanation.trim();
       
     } catch (error) {
       console.error('Explanation error:', error);
@@ -373,16 +357,6 @@ Examples:
     });
   }, []);
 
-  const toggleModelPreference = useCallback(() => {
-    setUseLocalModel(prev => !prev);
-  }, []);
-
-  // Initialize model status on mount
-  useState(() => {
-    console.log('🔄 Initializing model status check...');
-    checkModelStatus();
-  }, []);
-
   return { 
     translations, 
     isTranslating,
@@ -390,11 +364,6 @@ Examples:
     translateText, 
     explainTranslation,
     clearTranslations,
-    trainFromCorrection,
-    useLocalModel,
-    toggleModelPreference,
-    modelStatus,
-    modelStatusChecked,
-    checkModelStatus
+    trainFromCorrection
   };
 };

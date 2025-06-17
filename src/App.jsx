@@ -7,9 +7,8 @@ import { AudioCapture } from './components/AudioCapture';
 import { ModeSelector } from './components/ModeSelector';
 import { SentenceBox } from './components/SentenceBox';
 import { useTypewriter } from './hooks/useTypewriter';
-import DebugTranslation from './components/DebugTranslation'
+import ModelDownloader from './components/ModelDownloader';
 
-// Enhanced translation item component with explanation feature
 const TranslationItem = ({ item, index, onExplain, isExplaining }) => {
   const [showExplanation, setShowExplanation] = useState(false);
   const [explanation, setExplanation] = useState('');
@@ -20,7 +19,7 @@ const TranslationItem = ({ item, index, onExplain, isExplaining }) => {
   
   const { displayText: translationText, isTyping: isTypingTranslation } = useTypewriter(
     textToDisplay,
-    25 // Faster typing for real-time feel
+    25
   );
 
   const handleExplain = async () => {
@@ -37,100 +36,90 @@ const TranslationItem = ({ item, index, onExplain, isExplaining }) => {
   };
 
   return (
-    
-    <div key={`${item.id || item.timestamp}-${index}`} className="animate-fadeIn mb-4">
-      
-      <div className={`bg-primary-800/40 rounded-xl p-4 border transition-all duration-300 ${
-        item.isParagraphComplete ? 'border-purple-500/40 shadow-lg shadow-purple-500/20' : 
-        item.isSentenceComplete ? 'border-accent-500/30 shadow-md' : 'border-primary-700/30'
+    <div key={`${item.id || item.timestamp}-${index}`} className="mb-6 animate-fadeIn">
+      <div className={`bg-white/5 rounded-lg p-6 border transition-all duration-300 ${
+        item.isParagraphComplete ? 'border-purple-500/40' : 
+        item.isSentenceComplete ? 'border-accent-500/30' : 'border-white/10'
       }`}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <div className="text-xs text-primary-400 mb-1 flex items-center space-x-2">
-              <span>ORIGINAL</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-3">
+            <div className="text-xs text-gray-400 uppercase tracking-wider mb-1 flex items-center space-x-3">
+              <span>Original</span>
               {item.contextInfo && (
-                <span className="text-accent-400 bg-accent-500/20 px-1.5 py-0.5 rounded text-xs">
+                <span className="text-accent-400 bg-accent-500/10 px-2 py-1 rounded text-xs">
                   {item.contextInfo.replace(/[\[\]]/g, '')}
                 </span>
               )}
               {item.isParagraphComplete && (
-                <span className="text-purple-400 bg-purple-500/20 px-2 py-0.5 rounded text-xs font-medium">
-                  PARAGRAPH
-                </span>
-              )}
-              {item.isSentenceComplete && !item.isParagraphComplete && (
-                <span className="text-green-400 bg-green-500/20 px-2 py-0.5 rounded text-xs">
-                  COMPLETE
+                <span className="text-purple-400 bg-purple-500/10 px-2 py-1 rounded text-xs">
+                  Paragraph
                 </span>
               )}
             </div>
-            <p className="text-primary-200 text-sm leading-relaxed min-h-[1.2rem]">
+            <p className="text-gray-100 text-base leading-relaxed">
               {item.original}
             </p>
           </div>
 
-          <div>
-            <div className="text-xs text-accent-400 mb-1 flex items-center space-x-2">
-              <span>TRANSLATION</span>
+          <div className="space-y-3">
+            <div className="text-xs text-accent-400 uppercase tracking-wider mb-1 flex items-center space-x-3">
+              <span>Translation</span>
               {item.tone && item.tone !== 'Neutral' && (
-                <span className="text-orange-400 bg-orange-500/20 px-2 py-0.5 rounded text-xs">
+                <span className="text-orange-400 bg-orange-500/10 px-2 py-1 rounded text-xs">
                   {item.tone}
                 </span>
               )}
               {isTypingTranslation && (
-                <span className="text-green-400 animate-pulse">AI Translating...</span>
+                <span className="text-green-400 animate-pulse text-xs">Translating...</span>
               )}
             </div>
-            <p className="text-white text-sm font-medium leading-relaxed min-h-[1.2rem]">
+            <p className="text-white text-base font-medium leading-relaxed">
               {translationText}
               {isTypingTranslation && <span className="animate-pulse ml-1">|</span>}
             </p>
           </div>
         </div>
 
-        <div className="mt-3 pt-3 border-t border-primary-700/30 flex items-center justify-between text-xs text-primary-400">
+        <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-sm text-gray-400">
           <div className="flex items-center space-x-4">
             {item.confidence && (
               <span>Confidence: {Math.round(item.confidence * 100)}%</span>
             )}
-            {item.context && (
-              <span>Context: {item.context}</span>
-            )}
-            <span className={`px-2 py-1 rounded transition-colors ${
-              item.isFinal ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
+            <span className={`px-2 py-1 rounded ${
+              item.isFinal ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'
             }`}>
               {item.isFinal ? 'Final' : 'Live'}
             </span>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3">
             <button
               onClick={handleExplain}
               disabled={isExplaining}
-              className={`px-3 py-1 rounded text-xs font-medium transition-all duration-200 ${
+              className={`px-3 py-1.5 rounded text-sm transition-all ${
                 showExplanation 
-                  ? 'bg-blue-500/30 text-blue-300 border border-blue-500/50' 
-                  : 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30'
-              } ${isExplaining ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'}`}
+                  ? 'bg-blue-500/20 text-blue-300' 
+                  : 'bg-white/10 text-gray-300 hover:bg-white/20'
+              } ${isExplaining ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {isExplaining ? 'Explaining...' : showExplanation ? 'Hide' : 'Explain'}
             </button>
-            <span>{new Date(item.timestamp).toLocaleTimeString()}</span>
+            <span className="text-xs">{new Date(item.timestamp).toLocaleTimeString()}</span>
           </div>
         </div>
 
         {showExplanation && explanation && (
-          <div className="mt-3 pt-3 border-t border-blue-500/30 bg-blue-500/10 rounded-lg p-3">
-            <div className="text-xs text-blue-400 mb-1 font-medium">AI EXPLANATION</div>
-            <p className="text-blue-200 text-sm leading-relaxed">{explanation}</p>
+          <div className="mt-4 pt-4 border-t border-blue-500/20 bg-blue-500/5 rounded-lg p-4">
+            <div className="text-xs text-blue-400 uppercase tracking-wider mb-2">AI Explanation</div>
+            <p className="text-blue-100 text-sm leading-relaxed">{explanation}</p>
           </div>
         )}
 
         {item.alternatives && item.alternatives.length > 0 && (
-          <div className="mt-2 pt-2 border-t border-primary-700/30">
-            <div className="text-xs text-primary-400 mb-1">ALTERNATIVES</div>
+          <div className="mt-4 pt-4 border-t border-white/10">
+            <div className="text-xs text-gray-400 uppercase tracking-wider mb-2">Alternatives</div>
             <div className="flex flex-wrap gap-2">
               {item.alternatives.map((alt, altIndex) => (
-                <span key={altIndex} className="text-xs bg-primary-700/50 px-2 py-1 rounded text-primary-300 hover:bg-primary-600/50 transition-colors">
+                <span key={altIndex} className="text-xs bg-white/10 px-2 py-1 rounded text-gray-300">
                   {alt}
                 </span>
               ))}
@@ -146,11 +135,11 @@ export default function TranslationApp() {
   const [mode, setMode] = useState('translate');
   const [realtimeTranscript, setRealtimeTranscript] = useState('');
   const [stableTranslations, setStableTranslations] = useState([]);
+  const [modelsReady, setModelsReady] = useState(false);
   
   const { installPWA, canInstall, isInstalled } = usePWA();
   const { translateText, translations, isTranslating, isExplaining, explainTranslation, clearTranslations } = useDeepSeek();
 
-  // Stabilize translations to prevent flickering
   useEffect(() => {
     if (translations.length > 0) {
       const finalTranslations = translations.filter(t => t.isFinal || t.isSentenceComplete);
@@ -160,23 +149,20 @@ export default function TranslationApp() {
             !prev.some(prevT => prevT.id === newT.id || 
               (prevT.original === newT.original && prevT.timestamp === newT.timestamp))
           );
-          return [...newTranslations, ...prev].slice(0, 15); // Keep last 15 translations
+          return [...newTranslations, ...prev].slice(0, 15);
         });
       }
     }
   }, [translations]);
 
   const handleTranscriptUpdate = useCallback(async (transcriptData) => {
-  if (transcriptData.isSentenceComplete) {
-    // Clear interim transcript when sentence is complete
-    setRealtimeTranscript('');
-    // Only translate complete sentences
-    await translateText(transcriptData);
-  } else {
-    // Show interim results
-    setRealtimeTranscript(transcriptData.text);
-  }
-}, [translateText]);
+    if (transcriptData.isSentenceComplete) {
+      setRealtimeTranscript('');
+      await translateText(transcriptData);
+    } else {
+      setRealtimeTranscript(transcriptData.text);
+    }
+  }, [translateText]);
 
   const { 
     isListening, 
@@ -199,50 +185,30 @@ export default function TranslationApp() {
   }, [isListening, startListening, stopListening, clearTranslations]);
 
   const renderRealtimeTranscript = () => {
-  if (!isListening && stableTranslations.length > 0) return null;
-
-  return (
-    <div className="mb-6 bg-primary-800/30 rounded-xl p-4 border border-primary-700/50">
-      <div className="flex justify-between items-center mb-2">
-        <span className="text-xs text-primary-400 font-medium">
-          {realtimeTranscript ? 'LIVE TRANSCRIPTION' : 'READY TO TRANSLATE'}
-        </span>
-        <div className="flex items-center space-x-2">
-          {isListening && (
-            <>
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-              <span className="text-xs text-primary-400">Listening</span>
-            </>
-          )}
-          {isTranslating && (
-            <div className="flex items-center space-x-1">
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-              <span className="text-xs text-blue-400">Translating</span>
-            </div>
-          )}
-        </div>
-      </div>
-      <p className="text-primary-200 text-lg leading-relaxed min-h-[1.5rem]">
-        {realtimeTranscript || 'Speak in Chinese to begin...'}
-      </p>
-    </div>
-  );
-};
-  const renderTranslations = () => {
-    if (stableTranslations.length === 0) return null;
+    if (!isListening && stableTranslations.length > 0) return null;
+    if (!realtimeTranscript) return null;
 
     return (
-      <div className="mb-24 space-y-3">
-        <div className="text-xs text-primary-400 font-medium mb-4 flex items-center space-x-2">
-          <span>AI TRANSLATIONS</span>
-          <span className="text-accent-400">({stableTranslations.length} completed)</span>
-          <div className="flex items-center space-x-1 text-blue-400">
-            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-            <span>AI-Powered</span>
-          </div>
+      <div className="bg-white/5 rounded-lg p-6 mb-6 border border-white/10">
+        <div className="text-xs text-gray-400 uppercase tracking-wider mb-2">Live Transcription</div>
+        <p className="text-gray-200 text-lg">{realtimeTranscript}</p>
+      </div>
+    );
+  };
+
+  const renderTranslations = () => {
+    if (stableTranslations.length === 0) {
+      return (
+        <div className="bg-white/5 rounded-lg p-8 text-center border border-white/10">
+          <p className="text-gray-400 mb-2">No translations yet</p>
+          <p className="text-sm text-gray-500">Start speaking to see real-time translations</p>
         </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        <div className="text-sm text-gray-400 uppercase tracking-wider">Completed Translations</div>
         {stableTranslations.map((item, index) => (
           <TranslationItem 
             key={`${item.id || item.timestamp}-${index}`} 
@@ -260,7 +226,8 @@ export default function TranslationApp() {
     if (mode !== 'transcribe' || !currentTranscript) return null;
     
     return (
-      <div className="mb-24">
+      <div className="space-y-6">
+        <div className="text-sm text-gray-400 uppercase tracking-wider">Transcription</div>
         <SentenceBox
           text={currentTranscript}
           mode={mode}
@@ -271,91 +238,67 @@ export default function TranslationApp() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-900 via-primary-800 to-primary-900 text-white">
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-accent-500/10 rounded-full blur-3xl animate-pulse-slow" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-primary-600/10 rounded-full blur-3xl animate-pulse-slow" />
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-60 h-60 bg-blue-500/5 rounded-full blur-3xl animate-pulse-slow" />
-      </div>
-
-      <div className="relative z-10 container mx-auto px-6 py-8 max-w-4xl">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-accent-400 via-blue-400 to-accent-600 bg-clip-text text-transparent mb-3">
-            AI-Powered Real-Time Translator
-          </h1>
-          <p className="text-primary-300 text-lg mb-2">
-            {mode === 'translate' ? 'Professional meeting translation with AI explanations' : 'AI-enhanced speech transcription'}
-          </p>
-          <div className="flex items-center justify-center space-x-2 text-sm text-blue-400">
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"/>
-            </svg>
-            <span>Optimized for Business Meetings</span>
-            <span className="text-primary-500">•</span>
-            <span>Context-Aware AI</span>
-            <span className="text-primary-500">•</span>
-            <span>Instant Explanations</span>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
+      <ModelDownloader onComplete={() => setModelsReady(true)} />
+      
+      {!modelsReady ? (
+        <div className="fixed inset-0 flex items-center justify-center bg-gray-900/90 backdrop-blur-sm z-50">
+          <div className="text-center p-8 max-w-md">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white mx-auto mb-6"></div>
+            <h3 className="text-xl font-medium text-white mb-2">Loading Translation Engine</h3>
+            <p className="text-gray-400">This may take a moment...</p>
           </div>
         </div>
+      ) : (
+        <div className="relative z-10 container mx-auto px-4 sm:px-6 py-12 max-w-3xl">
+          <div className="text-center mb-12">
+            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+              AI-Powered Real-Time Translator
+            </h1>
+            <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+              {mode === 'translate' 
+                ? 'Professional meeting translation with contextual understanding' 
+                : 'Accurate speech transcription with AI enhancements'}
+            </p>
+          </div>
 
-        <ModeSelector mode={mode} setMode={setMode} />
+          <div className="mb-8">
+            <ModeSelector mode={mode} setMode={setMode} />
+          </div>
 
-        <StatusIndicator isListening={isListening} isTranslating={isTranslating} />
+          <div className="mb-8">
+            <StatusIndicator isListening={isListening} isTranslating={isTranslating} />
+          </div>
 
-        {renderRealtimeTranscript()}
+          {renderRealtimeTranscript()}
 
-        {mode === 'translate' && renderTranslations()}
+          <div className="space-y-10">
+            {mode === 'translate' && renderTranslations()}
+            {renderTranscriptionMode()}
+          </div>
 
-        {renderTranscriptionMode()}
+          <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-20">
+            <AudioCapture 
+              isListening={isListening} 
+              onToggleListening={handleToggleListening}
+            />
+          </div>
 
-        <AudioCapture 
-          isListening={isListening} 
-          onToggleListening={handleToggleListening}
-          isLoading={isTranslating}
-        />
-
-        {isListening && (
-          <div className="fixed bottom-32 left-1/2 transform -translate-x-1/2 z-20">
-            <div className="bg-primary-800/90 backdrop-blur-sm rounded-full px-4 py-2 border border-primary-700/50 flex items-center space-x-3 text-xs text-primary-300">
-              <div className="flex items-center space-x-1">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span>Live Speech</span>
-              </div>
-              <div className="w-px h-4 bg-primary-600"></div>
-              <div className="flex items-center space-x-1">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                <span>AI Translation</span>
-              </div>
-              <div className="w-px h-4 bg-primary-600"></div>
-              <div className="flex items-center space-x-1">
-                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
-                <span>Smart Context</span>
-              </div>
-              <div className="w-px h-4 bg-primary-600"></div>
-              <div className="flex items-center space-x-1">
-                <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
-                <span>Meeting Mode</span>
-              </div>
+          {canInstall && !isInstalled && (
+            <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-20">
+              <button
+                onClick={installPWA}
+                className="bg-accent-500 hover:bg-accent-600 text-white px-5 py-2.5 rounded-full shadow-lg flex items-center space-x-2 transition-all"
+              >
+                <span>Install App</span>
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" />
+                </svg>
+              </button>
             </div>
-          </div>
-        )}
-
-        {canInstall && !isInstalled && (
-          <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-20">
-            <button
-              onClick={installPWA}
-              className="bg-accent-500 hover:bg-accent-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center space-x-2 transition-all hover:scale-105"
-            >
-              <span>Install App</span>
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" />
-              </svg>
-            </button>
-          </div>
-        )}
-      </div>
-      <DebugTranslation/>
+          )}
+        </div>
+      )}
     </div>
-    
   );
 }
